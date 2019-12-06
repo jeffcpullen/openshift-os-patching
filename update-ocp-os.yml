@@ -1,0 +1,42 @@
+---
+- hosts: OSEv3
+  serial: 1
+  tasks:
+
+  - name: Drain node
+    command: "oc adm drain {{ inventory_hostname }} --force --delete-local-data --ignore-daemonsets"
+    delegate_to: "{{ groups.masters | first }}"
+
+  - name: docker excluder
+    command: atomic-openshift-docker-excluder exclude
+
+  - name: openshift excluder
+    command: atomic-openshift-excluder exclude
+
+  - name: Update everything
+    yum:
+      name: '*'
+      state: latest
+      exclude: kernel*
+
+  - name: Reboot required check
+    command: /root/needs-restarting.py -r
+    register: reboot_required
+    ignore_errors: True
+    changed_when: False
+    when: ansible_distribution == 'CentOS' or ansible_distribution == 'Red Hat Enterprise Linux'
+
+  - name: Reboot node
+    reboot:
+    when: (ansible_distribution == 'CentOS' or ansible_distribution == 'Red Hat Enterprise Linux') and reboot_required.rc == 1
+
+  - name: Check that master is back and running
+    uri:
+      url: "https://{{ inventory_hostname }}:{{ openshift_master_api_port }}/healthz"
+      validate_certs: no
+      method: GET
+    register: _result
+    until: _result.status == 200
+    delay: 10
+    when: inventory_hostname in groups.masters
+    delegate_to: "{{ groups.masters | first }}"
