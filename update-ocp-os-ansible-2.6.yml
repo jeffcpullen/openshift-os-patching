@@ -3,60 +3,73 @@
   serial: 1
   tasks:
 
-  - name: Drain node
-    command: "oc adm drain {{ inventory_hostname }} --force --delete-local-data --ignore-daemonsets"
-    delegate_to: "{{ groups.masters | first }}"
-
-  - name: docker excluder
-    command: atomic-openshift-docker-excluder exclude
-
-  - name: openshift excluder
-    command: atomic-openshift-excluder exclude
-
-  - name: Update everything
+  - name: Check if there are any available updates
     yum:
-      name: '*'
-      state: latest
-      exclude: kernel*
+      list: updates
+      update_cache: true
+    register: _yum_output
 
-  - name: Reboot required check
-    command: needs-restarting -r
-    register: reboot_required
-    ignore_errors: True
-    changed_when: False
-
-  - name: debug reboot_required
+  - name: debug yum output
     debug:
-      var: reboot_required
+      var: _yum_output
 
-  - name: Rebooting machine
-    shell: sleep 2 && shutdown -r now "Ansible updates triggered"
-    async: 1
-    poll: 0
-    ignore_errors: true
-    when: reboot_required.stdout.find("Reboot is required") != -1
+  - name: Drain, exclude, update and uncordon if updates are available
+    block: 
 
-  - name: Wait for the reboot to complete
-    wait_for_connection:
-      connect_timeout: 20
-      sleep: 5
-      delay: 5
-      timeout: 300
-    when: reboot_required.stdout.find("Reboot is required") != -1
+    - name: Drain node
+      command: "oc adm drain {{ inventory_hostname }} --force --delete-local-data --ignore-daemonsets"
+      delegate_to: "{{ groups.masters | first }}"
+
+    - name: docker excluder
+      command: atomic-openshift-docker-excluder exclude
+
+    - name: openshift excluder
+      command: atomic-openshift-excluder exclude
+
+    - name: Update everything
+      yum:
+        name: '*'
+        state: latest
+
+    - name: Reboot required check
+      command: needs-restarting -r
+      register: reboot_required
+      ignore_errors: True
+      changed_when: False
+
+    - name: debug reboot_required
+      debug:
+        var: reboot_required
+
+    - name: Rebooting machine
+      shell: sleep 2 && shutdown -r now "Ansible updates triggered"
+      async: 1
+      poll: 0
+      ignore_errors: true
+      when: reboot_required.stdout.find("Reboot is required") != -1
+
+    - name: Wait for the reboot to complete
+      wait_for_connection:
+        connect_timeout: 20
+        sleep: 5
+        delay: 5
+        timeout: 300
+      when: reboot_required.stdout.find("Reboot is required") != -1
   
-  - name: Check that master is back and running
-    uri:
-      url: "https://{{ inventory_hostname }}:{{ openshift_master_api_port }}/healthz"
-      validate_certs: no
+    - name: Check that master is back and running
+      uri:
+        url: "https://{{ inventory_hostname }}:{{ openshift_master_api_port }}/healthz"
+        validate_certs: no
       method: GET
-    register: _result
-    until: _result.status == 200
-    delay: 10
-    retries: 50
-    when: inventory_hostname in groups.masters
-    delegate_to: "{{ groups.masters | first }}"
+      register: _result
+      until: _result.status == 200
+      delay: 10
+      retries: 50
+      when: inventory_hostname in groups.masters
+      delegate_to: "{{ groups.masters | first }}"
 
-  - name: Uncordon node
-    command: "oc adm uncordon {{ inventory_hostname }}"
-    delegate_to: "{{ groups.masters | first }}"
-
+    - name: Uncordon node
+      command: "oc adm uncordon {{ inventory_hostname }}"
+      delegate_to: "{{ groups.masters | first }}"
+  
+    when: _yum_output.results | length > 0
