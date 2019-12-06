@@ -59,5 +59,4 @@
   - name: Uncordon node
     command: "oc adm uncordon {{ inventory_hostname }}"
     delegate_to: "{{ groups.masters | first }}"
-    when: inventory_hostname in groups.masters
 
