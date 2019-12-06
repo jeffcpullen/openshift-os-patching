@@ -20,7 +20,7 @@
       exclude: kernel*
 
   - name: Reboot required check
-    command: needs-restarting.py -r
+    command: needs-restarting -r
     register: reboot_required
     ignore_errors: True
     changed_when: False
