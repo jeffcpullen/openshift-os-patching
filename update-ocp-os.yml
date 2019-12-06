@@ -40,3 +40,9 @@
     delay: 10
     when: inventory_hostname in groups.masters
     delegate_to: "{{ groups.masters | first }}"
+
+
+  - name: Uncordon node
+    command: "oc adm uncordon {{ inventory_hostname }}"
+    delegate_to: "{{ groups.masters | first }}"
+
