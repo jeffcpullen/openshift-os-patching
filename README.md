@@ -1,0 +1,1 @@
+# openshift-os-patching
