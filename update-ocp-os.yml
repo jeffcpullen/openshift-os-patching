@@ -13,8 +13,8 @@
     debug:
       var: _yum_output
 
-    - name: Drain, exclude, update and uncordon if updates are available
-      block: 
+  - name: Drain, exclude, update and uncordon if updates are available
+    block: 
 
     - name: Drain node
       command: "oc adm drain {{ inventory_hostname }} --force --delete-local-data --ignore-daemonsets"
