@@ -1,5 +1,7 @@
 # Simple playbook for OS patching on OpenShift
 
+Requires ansible 2.7+
+
 To use this run the following command
 
 ```
