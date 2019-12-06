@@ -24,7 +24,6 @@
     register: reboot_required
     ignore_errors: True
     changed_when: False
-    when: ansible_distribution == 'CentOS' or ansible_distribution == 'RedHat'
 
   - name: debug reboot_required
     debug:
@@ -35,7 +34,15 @@
     async: 1
     poll: 0
     ignore_errors: true
-    when: not reboot_required.stdout.find('Reboot is probably not necessary.')
+    when: reboot_required.stdout.find("Reboot is required") != -1
+
+  - name: Wait for the reboot to complete
+    wait_for_connection:
+      connect_timeout: 20
+      sleep: 5
+      delay: 5
+      timeout: 300
+    when: reboot_required.stdout.find("Reboot is required") != -1
   
   - name: Check that master is back and running
     uri:
@@ -45,5 +52,6 @@
     register: _result
     until: _result.status == 200
     delay: 10
+    retries: 50
     when: inventory_hostname in groups.masters
     delegate_to: "{{ groups.masters | first }}"
