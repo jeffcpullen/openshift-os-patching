@@ -24,7 +24,7 @@
     register: reboot_required
     ignore_errors: True
     changed_when: False
-    when: ansible_distribution == 'CentOS' or ansible_distribution == 'Red Hat Enterprise Linux'
+    when: ansible_distribution == 'CentOS' or ansible_distribution == 'RedHat'
 
   - name: Rebooting machine
     shell: sleep 2 && shutdown -r now "Ansible updates triggered"
