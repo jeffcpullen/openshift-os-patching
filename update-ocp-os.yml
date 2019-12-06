@@ -3,46 +3,59 @@
   serial: 1
   tasks:
 
-  - name: Drain node
-    command: "oc adm drain {{ inventory_hostname }} --force --delete-local-data --ignore-daemonsets"
-    delegate_to: "{{ groups.masters | first }}"
-
-  - name: docker excluder
-    command: atomic-openshift-docker-excluder exclude
-
-  - name: openshift excluder
-    command: atomic-openshift-excluder exclude
-
-  - name: Update everything
+  - name: Check if there are any available updates
     yum:
-      name: '*'
-      state: latest
-      exclude: kernel*
+      list: updates
+      update_cache: true
+    register: _yum_output
 
-  - name: Reboot required check
-    command: needs-restarting -r
-    register: reboot_required
-    ignore_errors: True
-    changed_when: False
-    when: ansible_distribution == 'CentOS' or ansible_distribution == 'RedHat'
+  - name: debug yum output
+    debug:
+      var: _yum_output
 
-  - name: Reboot node
-    reboot:
-    when: (ansible_distribution == 'CentOS' or ansible_distribution == 'Red Hat Enterprise Linux') and reboot_required.rc == 1
+    - name: Drain, exclude, update and uncordon if updates are available
+      block: 
 
-  - name: Check that master is back and running
-    uri:
-      url: "https://{{ inventory_hostname }}:{{ openshift_master_api_port }}/healthz"
-      validate_certs: no
-      method: GET
-    register: _result
-    until: _result.status == 200
-    delay: 10
-    when: inventory_hostname in groups.masters
-    delegate_to: "{{ groups.masters | first }}"
+    - name: Drain node
+      command: "oc adm drain {{ inventory_hostname }} --force --delete-local-data --ignore-daemonsets"
+      delegate_to: "{{ groups.masters | first }}"
 
+    - name: docker excluder
+      command: atomic-openshift-docker-excluder exclude
 
-  - name: Uncordon node
-    command: "oc adm uncordon {{ inventory_hostname }}"
-    delegate_to: "{{ groups.masters | first }}"
+    - name: openshift excluder
+      command: atomic-openshift-excluder exclude
 
+    - name: Update everything
+      yum:
+        name: '*'
+        state: latest
+        exclude: kernel*
+
+    - name: Reboot required check
+      command: needs-restarting -r
+      register: reboot_required
+      ignore_errors: True
+      changed_when: False
+      when: ansible_distribution == 'CentOS' or ansible_distribution == 'RedHat'
+
+    - name: Reboot node
+      reboot:
+      when: (ansible_distribution == 'CentOS' or ansible_distribution == 'Red Hat Enterprise Linux') and reboot_required.rc == 1
+
+    - name: Check that master is back and running
+      uri:
+        url: "https://{{ inventory_hostname }}:{{ openshift_master_api_port }}/healthz"
+        validate_certs: no
+        method: GET
+      register: _result
+      until: _result.status == 200
+      delay: 10
+      when: inventory_hostname in groups.masters
+      delegate_to: "{{ groups.masters | first }}"
+
+    - name: Uncordon node
+      command: "oc adm uncordon {{ inventory_hostname }}"
+      delegate_to: "{{ groups.masters | first }}"
+
+    when: _yum_output.results | length > 0
